@@ -6,3 +6,6 @@ openpyxl
 folium
 streamlit-folium
 requests
+google-generativeai
+pyttsx3
+Pillow
