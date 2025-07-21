@@ -162,8 +162,8 @@ with tabs[1]:
     st.pyplot(fig4)
 
     promedio = df_nasa['Radiacion'].mean()
-    m = folium.Map(location=[-0.22, -78.36], zoom_start=9)
-    folium.Circle([-0.22, -78.36], radius=30000, popup=f"Promedio: {promedio:.1f} W/m²",
+    m = folium.Map(location=[-0.5406111, -78.2084602], zoom_start=9)
+    folium.Circle([-0.5406111, -78.2084602], radius=30000, popup=f"Promedio: {promedio:.1f} W/m²",
                   color='orange', fill=True, fill_opacity=0.4).add_to(m)
     folium_static(m)
 
