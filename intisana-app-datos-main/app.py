@@ -242,6 +242,10 @@ with tabs[1]:
     import matplotlib.dates as mdates
     import folium
     from streamlit_folium import folium_static
+    import requests
+    import pandas as pd
+    import seaborn as sns
+    import matplotlib.pyplot as plt
 
     # --- Funciones de carga ---
     @st.cache_data
@@ -275,13 +279,73 @@ with tabs[1]:
             'Radiacion': [val * 10 for val in data['ALLSKY_SFC_SW_DWN'].values()],
             'Humedad': list(data['RH2M'].values())
         })
-        df_nasa['Periodo'] = df_nasa['Fecha'].dt.year.map(lambda x: 'NASA 2008' if x == 2008 else ('NASA 2024' if x == 2024 else None))
+        df_nasa['Periodo'] = df_nasa['Fecha'].dt.year.map(
+            lambda x: 'NASA 2008' if x == 2008 else ('NASA 2024' if x == 2024 else None))
         return df_nasa.dropna(subset=['Periodo'])
 
     df_c09, df_c10, df_h09, df_h10 = cargar_datos()
     df_nasa = cargar_nasa()
 
-    # 1. Series temporales de Radiación (filtradas por año)
+
+    st.markdown("### 📋 Datos completos cargados")
+
+    # Concatenar todos los datos de radiación y humedad en un solo DataFrame para mostrar
+    df_radiacion_total = pd.concat([df_c09, df_c10, df_nasa[['Fecha', 'Radiacion', 'Periodo']]], ignore_index=True)
+    df_humedad_total = pd.concat([df_h09, df_h10, df_nasa[['Fecha', 'Humedad', 'Periodo']]], ignore_index=True)
+
+    # Convertir fechas a string para mejor búsqueda en la tabla
+    df_radiacion_total['Fecha'] = df_radiacion_total['Fecha'].dt.strftime('%Y-%m-%d')
+    df_humedad_total['Fecha'] = df_humedad_total['Fecha'].dt.strftime('%Y-%m-%d')
+
+    # Mostrar Radiación con filtro por Periodo
+    st.markdown("#### Radiación (2008, 2024, NASA)")
+    periodo_radiacion = st.selectbox("Filtrar por Periodo Radiación:", options=['Todos'] + sorted(df_radiacion_total['Periodo'].unique().tolist()))
+    if periodo_radiacion != 'Todos':
+        df_radiacion_mostrar = df_radiacion_total[df_radiacion_total['Periodo'] == periodo_radiacion]
+    else:
+        df_radiacion_mostrar = df_radiacion_total
+    st.dataframe(df_radiacion_mostrar.style.format({'Radiacion': '{:.1f}'}), use_container_width=True)
+
+    # Mostrar Humedad con filtro por Periodo
+    st.markdown("#### Humedad (2008, 2024, NASA)")
+    periodo_humedad = st.selectbox("Filtrar por Periodo Humedad:", options=['Todos'] + sorted(df_humedad_total['Periodo'].unique().tolist()))
+    if periodo_humedad != 'Todos':
+        df_humedad_mostrar = df_humedad_total[df_humedad_total['Periodo'] == periodo_humedad]
+    else:
+        df_humedad_mostrar = df_humedad_total
+    st.dataframe(df_humedad_mostrar.style.format({'Humedad': '{:.1f}'}), use_container_width=True)
+
+    # --- Cuadro resumen comparativo ---
+    st.markdown("### 📊 Resumen Estadístico Comparativo")
+
+    def resumen_estadistico(df_radiacion, df_humedad):
+        # Radiación
+        rad_stats = df_radiacion.groupby('Periodo')['Radiacion'].agg(['mean', 'max', 'min']).reset_index()
+        rad_stats.columns = ['Periodo', 'Media Radiación (W/m²)', 'Máx Radiación (W/m²)', 'Mín Radiación (W/m²)']
+
+        # Humedad
+        hum_stats = df_humedad.groupby('Periodo')['Humedad'].agg(['mean', 'max', 'min']).reset_index()
+        hum_stats.columns = ['Periodo', 'Media Humedad (%)', 'Máx Humedad (%)', 'Mín Humedad (%)']
+
+        resumen = rad_stats.merge(hum_stats, on='Periodo')
+        resumen = resumen.sort_values('Periodo').reset_index(drop=True)
+        return resumen
+
+    # Concatenar datos para resumen, solo años 2008 y 2024
+    df_radiacion_resumen = pd.concat([df_c09, df_c10, df_nasa], ignore_index=True)
+    df_humedad_resumen = pd.concat([df_h09, df_h10, df_nasa], ignore_index=True)
+
+    resumen = resumen_estadistico(df_radiacion_resumen, df_humedad_resumen)
+    st.dataframe(resumen.style.format({
+        'Media Radiación (W/m²)': '{:.1f}',
+        'Máx Radiación (W/m²)': '{:.1f}',
+        'Mín Radiación (W/m²)': '{:.1f}',
+        'Media Humedad (%)': '{:.1f}',
+        'Máx Humedad (%)': '{:.1f}',
+        'Mín Humedad (%)': '{:.1f}'
+    }))
+
+    # --- 1. Series temporales de Radiación (filtradas por año) ---
     st.markdown("### 📈 1. Series temporales de Radiación")
     for anio, (local, nasa) in {'2008': ('C09 2008', 'NASA 2008'), '2024': ('C10 2024', 'NASA 2024')}.items():
         df_local = (df_c09 if anio == '2008' else df_c10)
@@ -298,7 +362,7 @@ with tabs[1]:
         ax.set_xlabel("Fecha")
         st.pyplot(fig)
 
-    # 2. Series temporales de Humedad (filtradas por año)
+    # --- 2. Series temporales de Humedad (filtradas por año) ---
     st.markdown("### 💧 2. Series temporales de Humedad")
     for anio, (local_df, nasa_tag) in {'2008': (df_h09, 'NASA 2008'), '2024': (df_h10, 'NASA 2024')}.items():
         df_local = local_df.copy()
@@ -316,7 +380,7 @@ with tabs[1]:
         ax.set_xlabel("Fecha")
         st.pyplot(fig)
 
-    # 3. Promedios Mensuales de Radiación con eje X mejorado (sin filtro anual)
+    # --- 3. Promedios Mensuales de Radiación ---
     st.markdown("### 📅 3. Promedios mensuales de Radiación")
     for anio in ['2008', '2024']:
         df_local = df_c09 if anio == '2008' else df_c10
@@ -348,7 +412,7 @@ with tabs[1]:
         ax.grid()
         st.pyplot(fig)
 
-    # 4. Boxplots de Radiación con filtro anual
+    # --- 4. Boxplots de Radiación con filtro anual ---
     st.markdown("### 📦 4. Boxplots de Radiación")
     for anio in ['2008', '2024']:
         df_r = df_c09 if anio == '2008' else df_c10
@@ -365,7 +429,7 @@ with tabs[1]:
         ax.set_ylabel("Radiación (W/m²)")
         st.pyplot(fig)
 
-    # 5. Boxplots de Humedad (sin cambio)
+    # --- 5. Boxplots de Humedad ---
     st.markdown("### 📦 5. Boxplots de Humedad")
     for anio in ['2008', '2024']:
         df_h = df_h09 if anio == '2008' else df_h10
@@ -382,8 +446,34 @@ with tabs[1]:
         ax.set_ylabel("Humedad (%)")
         st.pyplot(fig)
 
-    # 6. Días con Radiación Más Alta (Top 10)
-    st.markdown("### 🔥 6. Días con Radiación Más Alta (Top 10)")
+    # --- 6. Días con Radiación Más Alta (Top 10) ---
+    # --- Cuadro con días con mayor radiación ---
+    st.markdown("### 🔥 Días con Mayor Radiación (Top 10)")
+
+    def dias_top_radiacion(df_local, df_nasa, anio_local, anio_nasa, etiqueta_local, etiqueta_nasa):
+        df_local_ano = df_local[df_local['Fecha'].dt.year == anio_local].copy()
+        df_local_ano['Periodo'] = etiqueta_local
+        df_nasa_ano = df_nasa[(df_nasa['Fecha'].dt.year == anio_nasa) & (df_nasa['Periodo'] == etiqueta_nasa)].copy()
+
+        top_local = df_local_ano.nlargest(10, 'Radiacion')[['Fecha', 'Radiacion']].assign(Fuente=etiqueta_local)
+        top_nasa = df_nasa_ano.nlargest(10, 'Radiacion')[['Fecha', 'Radiacion']].assign(Fuente=etiqueta_nasa)
+
+        top_concat = pd.concat([top_local, top_nasa], ignore_index=True)
+        top_concat = top_concat.sort_values(['Fuente', 'Radiacion'], ascending=[True, False]).reset_index(drop=True)
+        return top_concat
+
+    top_2008 = dias_top_radiacion(df_c09, df_nasa, 2008, 2008, 'C09 2008', 'NASA 2008')
+    top_2024 = dias_top_radiacion(df_c10, df_nasa, 2024, 2024, 'C10 2024', 'NASA 2024')
+
+    st.markdown("#### Año 2008")
+    st.dataframe(top_2008.style.format({'Fecha': lambda x: x.strftime('%Y-%m-%d'), 'Radiacion': '{:.1f}'}))
+
+    st.markdown("#### Año 2024")
+    st.dataframe(top_2024.style.format({'Fecha': lambda x: x.strftime('%Y-%m-%d'), 'Radiacion': '{:.1f}'}))
+
+
+    # 6. Días con Radiación Más Alta (Top 10) gráfico comparativo
+    st.markdown("### 🔥 6. Días con Radiación Más Alta (Top 10) - Gráfico Comparativo")
     for anio in ['2008', '2024']:
         df_r = df_c09 if anio == '2008' else df_c10
         df_r = df_r[df_r['Fecha'].dt.year == int(anio)].copy()
@@ -422,7 +512,8 @@ with tabs[1]:
         ax.grid(axis='y', linestyle='--', alpha=0.7)
         st.pyplot(fig)
 
-    # 7. Mapa interactivo con boxplot y círculo promedio NASA
+
+    # --- 7. Mapa interactivo con boxplot y círculo promedio NASA ---
     st.markdown("### 🗺️ 7. Mapa con Promedios de Radiación y Boxplot de Humedad")
 
     # Boxplot de Humedad general combinado
@@ -445,7 +536,7 @@ with tabs[1]:
     ).add_to(m)
     folium_static(m)
 
-    # 8. Descargar CSV final
+    # --- 8. Descargar CSV final ---
     st.markdown("### 💾 8. Descargar datos comparados")
     df_comparado_general = pd.concat([df_c09, df_c10, df_nasa], ignore_index=True).reset_index(drop=True)
     st.download_button(
