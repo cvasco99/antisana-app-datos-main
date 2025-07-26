@@ -9,3 +9,11 @@ requests
 google-generativeai
 pyttsx3
 Pillow
+streamlit
+google-generativeai
+pandas
+matplotlib
+seaborn
+requests
+openpyxl
+folium
